@@ -3,7 +3,9 @@ package testing
 import (
 	"fmt"
 	"github.com/kpassapk/golang-labs/testing/test"
+	"github.com/yalochat/go-components/tester"
 	"net/http"
+	"testing"
 	"time"
 )
 
@@ -42,4 +44,50 @@ func ExampleCustomTransport_Duration() {
 	c.Get("http://google.com")
 	fmt.Println(ttr.Duration())
 	// Output: 1s
+}
+
+func aRoundTripperReturning(response *http.Response, err error) *test.FakeRoundTripper {
+	rt := &test.FakeRoundTripper{}
+	rt.RoundTripReturns(response, err)
+	return rt
+}
+
+// Test_timedTransport_RoundTrip was created using the Goland IDE
+// and modified a little bit:
+// - got rid of 'want' and 'wantErr'
+// - added 'ret' and 'scenario' type aliases
+// - started the scenario
+//
+// TODO: add success and error test cases
+func Test_timedTransport_RoundTrip(t *testing.T) {
+	type fields struct {
+		rtp      http.RoundTripper
+		clock    Clock
+		reqStart time.Time
+		reqEnd   time.Time
+	}
+	type args struct {
+		r *http.Request
+	}
+	type ret = *http.Response
+	type scenario = tester.Tester[fields, args, ret]
+
+	// TODO uncomment and implement
+	// roundTrip := func(f fields, a args) (ret, error) {
+	// }
+
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		run    func(*scenario)
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tester.NewTester[fields, args, ret](t, tt.args)
+			tt.run(s)
+		})
+	}
 }
