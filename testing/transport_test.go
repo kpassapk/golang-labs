@@ -91,3 +91,33 @@ func Test_timedTransport_RoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// Test_timedTransport_Duration is a Table Test, and was created using the Goland IDE unmodified
+func Test_timedTransport_Duration(t *testing.T) {
+	type fields struct {
+		rtp      http.RoundTripper
+		clock    Clock
+		reqStart time.Time
+		reqEnd   time.Time
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   time.Duration
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := &timedTransport{
+				rtp:      tt.fields.rtp,
+				clock:    tt.fields.clock,
+				reqStart: tt.fields.reqStart,
+				reqEnd:   tt.fields.reqEnd,
+			}
+			if got := tr.Duration(); got != tt.want {
+				t.Errorf("Duration() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
