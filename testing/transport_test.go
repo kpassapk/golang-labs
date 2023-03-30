@@ -3,6 +3,7 @@ package testing
 import (
 	"fmt"
 	"github.com/kpassapk/golang-labs/testing/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/yalochat/go-components/tester"
 	"net/http"
 	"testing"
@@ -55,39 +56,37 @@ func aRoundTripperReturning(response *http.Response, err error) *test.FakeRoundT
 // Test_timedTransport_RoundTrip was created using the Goland IDE
 // and modified a little bit:
 // - got rid of 'want' and 'wantErr'
-// - added 'ret' and 'scenario' type aliases
-// - started the scenario
+// - added 'ret' and 'feature' type aliases
+// - started the feature
 //
 // TODO: add success and error test cases
 func Test_timedTransport_RoundTrip(t *testing.T) {
 	type fields struct {
-		rtp      http.RoundTripper
-		clock    Clock
-		reqStart time.Time
-		reqEnd   time.Time
+		rtp   http.RoundTripper
+		clock Clock
 	}
 	type args struct {
 		r *http.Request
 	}
 	type ret = *http.Response
-	type scenario = tester.Tester[fields, args, ret]
+	type feature = tester.Feature[fields, args, ret]
 
 	// TODO uncomment and implement
 	// roundTrip := func(f fields, a args) (ret, error) {
 	// }
 
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		run    func(*scenario)
+		name     string
+		args     args
+		scenario func(*feature)
 	}{
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := tester.NewTester[fields, args, ret](t, tt.args)
-			tt.run(s)
+			a := assert.New(t)
+			s := tester.NewFeature[fields, args, ret](a, tt.args)
+			tt.scenario(s)
 		})
 	}
 }
