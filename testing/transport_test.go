@@ -5,7 +5,10 @@ import (
 	"github.com/kpassapk/golang-labs/testing/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/yalochat/go-components/tester"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/mocktracer"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -47,76 +50,180 @@ func ExampleCustomTransport_Duration() {
 	// Output: 1s
 }
 
-func aRoundTripperReturning(response *http.Response, err error) *test.FakeRoundTripper {
-	rt := &test.FakeRoundTripper{}
-	rt.RoundTripReturns(response, err)
-	return rt
+type timedTransportFields = struct {
+	rtp      *test.FakeRoundTripper
+	dialer   *net.Dialer
+	clock    Clock
+	reqStart time.Time
+	reqEnd   time.Time
 }
 
-// Test_timedTransport_RoundTrip was created using the Goland IDE
-// and modified a little bit:
-// - got rid of 'want' and 'wantErr'
-// - added 'ret' and 'feature' type aliases
-// - started the feature
-//
-// TODO: add success and error test cases
-func Test_timedTransport_RoundTrip(t *testing.T) {
-	type fields struct {
-		rtp   http.RoundTripper
-		clock Clock
-	}
+func aSampleHTTPRequest() *http.Request {
+	return httptest.NewRequest("", "/", nil)
+}
+
+func TestTimedTransport_RoundTrip(t *testing.T) {
+	type fields = timedTransportFields
 	type args struct {
 		r *http.Request
 	}
-	type ret = *http.Response
-	type feature = tester.Feature[fields, args, ret]
+	// In this case, we're testing for a side effect, so the return type is the timed transport itself.
+	type ret = *timedTransport
+	type tst = tester.Feature[fields, args, ret]
 
-	// TODO uncomment and implement
-	// roundTrip := func(f fields, a args) (ret, error) {
-	// }
+	roundTrip := func(fields fields, args args) (ret, error) {
+		rt := &timedTransport{
+			clock: fields.clock,
+			rtp:   fields.rtp,
+		}
+		_, err := rt.RoundTrip(args.r)
+		return rt, err
+	}
+
+	assertDurationIs := func(ts *tst, d time.Duration) {
+		got := ts.Response.reqEnd.Sub(ts.Response.reqStart)
+		ts.Assert.Equal(d, got)
+	}
 
 	tests := []struct {
-		name     string
-		args     args
-		scenario func(*feature)
+		name string
+		args args
+		test func(*tst)
 	}{
-		// TODO: Add test cases.
+		{
+			name: "RoundTrip returns the response from the underlying RoundTripper",
+			args: args{
+				r: aSampleHTTPRequest(),
+			},
+			test: func(ts *tst) {
+				f := fields{
+					clock: &exampleClock{delta: 1 * time.Second},
+				}
+				ts.GivenFields(f)
+				ts.When(roundTrip)
+				ts.AssertNoError()
+				assertDurationIs(ts, 1*time.Second)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := assert.New(t)
-			s := tester.NewFeature[fields, args, ret](a, tt.args)
-			tt.scenario(s)
+			ts := tester.NewFeature[fields, args, ret](a, tt.args)
+			tt.test(ts)
 		})
 	}
 }
 
-// Test_timedTransport_Duration is a Table Test, and was created using the Goland IDE unmodified
 func Test_timedTransport_Duration(t *testing.T) {
+	type args struct{}
 	type fields struct {
 		rtp      http.RoundTripper
 		clock    Clock
 		reqStart time.Time
 		reqEnd   time.Time
 	}
+
+	getDuration := func(fields fields, args args) (time.Duration, error) {
+		tr := &timedTransport{
+			rtp:      fields.rtp,
+			clock:    fields.clock,
+			reqStart: fields.reqStart,
+			reqEnd:   fields.reqEnd,
+		}
+		return tr.Duration(), nil
+	}
+
 	tests := []struct {
 		name   string
 		fields fields
-		want   time.Duration
+		assert func(feature *tester.Feature[fields, args, time.Duration])
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Duration returns the difference between the start and end times",
+			fields: fields{
+				reqStart: wayback,
+				reqEnd:   wayback.Add(1 * time.Second),
+			},
+			assert: func(ts *tester.Feature[fields, args, time.Duration]) {
+				ts.When(getDuration)
+				ts.AssertNoError()
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tr := &timedTransport{
-				rtp:      tt.fields.rtp,
-				clock:    tt.fields.clock,
-				reqStart: tt.fields.reqStart,
-				reqEnd:   tt.fields.reqEnd,
-			}
-			if got := tr.Duration(); got != tt.want {
-				t.Errorf("Duration() = %v, want %v", got, tt.want)
-			}
+			a := assert.New(t)
+			ts := tester.NewFeature[fields, args, time.Duration](a, args{})
+			tt.assert(ts)
+		})
+	}
+}
+
+type fooFeature[A any, R any] struct {
+	*tester.Feature[*timedTransportFields, A, R]
+	*tester.Tracing
+}
+
+func (f *fooFeature[A, R]) AssertDeltaIs(t time.Duration) {
+	got := f.Fields.reqEnd.Sub(f.Fields.reqStart)
+	f.Feature.Assert.Equal(t, got)
+}
+
+func TestTimedTransport_RoundTrip2(t *testing.T) {
+	// TODO set fields, args, res and feature types
+	type fields = timedTransportFields
+	type args struct {
+		r *http.Request
+	}
+	type res = *http.Response
+	type feature = fooFeature[args, res]
+
+	execute := func(fields *fields, args args) (res, error) {
+		rt := &timedTransport{
+			clock: fields.clock,
+			rtp:   fields.rtp,
+		}
+
+		res, err := rt.RoundTrip(args.r)
+
+		fields.reqStart = rt.reqStart
+		fields.reqEnd = rt.reqEnd
+		return res, err
+	}
+
+	tests := []struct {
+		name     string
+		args     args
+		scenario func(*feature)
+	}{
+		{
+			name: "emits an empty error",
+			args: args{},
+			scenario: func(s *feature) {
+				// TODO add your steps here
+				s.Given(&fields{
+					clock: &exampleClock{delta: time.Second},
+					rtp:   &test.FakeRoundTripper{},
+				})
+				s.When(execute)
+				s.AssertNoError()
+				s.AssertSpanCountIs(0)
+				s.AssertDeltaIs(time.Second)
+				s.Then(func(is *assert.Assertions, res res) {
+					is.Equal(res, nil)
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := assert.New(t)
+			mt := mocktracer.Start()
+			defer mt.Stop()
+			f := tester.NewFeature[*fields, args, res](a, tt.args)
+			tf := tester.NewTracingFeature[*fields, args, res](f, mt)
+			tt.scenario(&feature{Feature: f, Tracing: tf})
 		})
 	}
 }

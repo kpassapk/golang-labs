@@ -34,6 +34,7 @@ func newTimedTransport(rtp http.RoundTripper, clock Clock) *timedTransport {
 	}
 }
 
+
 func (tr *timedTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	tr.reqStart = tr.clock.Now()
 	resp, err := tr.rtp.RoundTrip(r)
